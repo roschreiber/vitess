@@ -34,6 +34,10 @@ type (
 		CallExpr
 	}
 
+	builtinJSONValid struct {
+		CallExpr
+	}
+
 	builtinJSONUnquote struct {
 		CallExpr
 	}
@@ -73,6 +77,7 @@ var (
 	_ IR = (*builtinJSONLength)(nil)
 	_ IR = (*builtinJSONContainsPath)(nil)
 	_ IR = (*builtinJSONKeys)(nil)
+	_ IR = (*builtinJSONValid)(nil)
 )
 
 var errInvalidPathForTransform = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "In this situation, path expressions may not contain the * and ** tokens or an array range.")
@@ -266,6 +271,64 @@ func (call *builtinJSONRemove) compile(c *compiler) (ctype, error) {
 	}
 
 	return jt, nil
+}
+
+func (call *builtinJSONValid) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	_, err = intoJSON("JSON_VALID", arg)
+	if err != nil {
+		return newEvalInt64(0), nil
+	} else {
+		return newEvalInt64(1), nil
+	}
+}
+
+func (call *builtinJSONValid) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.TypeJSON:
+		c.asm.emit(func(env *ExpressionEnv) int {
+			// JSON values are always valid JSON documents
+			env.vm.stack[env.vm.sp-1] = newEvalInt64(1)
+			return 1
+		}, "FN JSON_VALID (SP-1)")
+
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		c.asm.emit(func(env *ExpressionEnv) int {
+			var p json.Parser
+			arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+			_, err := p.ParseBytes(arg.bytes)
+			if err != nil {
+				env.vm.stack[env.vm.sp-1] = newEvalInt64(0)
+			} else {
+				env.vm.stack[env.vm.sp-1] = newEvalInt64(1)
+			}
+			return 1
+		}, "FN JSON_VALID (SP-1)")
+
+	default:
+		c.asm.emit(func(env *ExpressionEnv) int {
+			env.vm.stack[env.vm.sp-1] = newEvalInt64(0)
+			return 1
+		}, "FN JSON_VALID (SP-1)")
+	}
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }
 
 func (call *builtinJSONUnquote) eval(env *ExpressionEnv) (eval, error) {

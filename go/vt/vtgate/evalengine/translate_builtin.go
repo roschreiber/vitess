@@ -800,6 +800,23 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			Method:    "JSON_KEYS",
 		}}, nil
 
+	case *sqlparser.JSONAttributesExpr:
+		var args []IR
+		doc, err := ast.translateExpr(call.JSONDoc)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, doc)
+
+		if call.Type == sqlparser.ValidAttributeType {
+			return &builtinJSONValid{CallExpr: CallExpr{
+				Arguments: args,
+				Method:    "JSON_VALID",
+			}}, nil
+		}
+
+		return nil, translateExprNotSupported(call)
+
 	case *sqlparser.CurTimeFuncExpr:
 		if call.Fsp > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for '%s'. Maximum is 6.", call.Fsp, call.Name.String())

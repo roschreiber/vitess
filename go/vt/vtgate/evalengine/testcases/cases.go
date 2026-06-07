@@ -33,6 +33,7 @@ var Cases = []TestCase{
 	{Run: FnJSONKeys},
 	{Run: FnJSONExtract},
 	{Run: FnJSONRemove},
+	{Run: FnJSONValid},
 	{Run: FnJSONContainsPath},
 	{Run: FnJSONUnquote},
 	{Run: JSONArray},
@@ -240,6 +241,24 @@ func FnJSONRemove(yield Query) {
 			yield(fmt.Sprintf("JSON_REMOVE(%s, '%s')", obj, path1), nil, false)
 		}
 	}
+}
+
+func FnJSONValid(yield Query) {
+	yield(`JSON_VALID('{"a": 1}')`, nil, false)
+	yield(`JSON_VALID('hello')`, nil, false)
+	yield(`JSON_VALID("hello")`, nil, false)
+	yield(`JSON_VALID(NULL)`, nil, false)
+	yield(`JSON_VALID(123)`, nil, false)
+	yield(`JSON_VALID(CAST('{"a": 1}' AS JSON))`, nil, false)
+	yield(`JSON_VALID('null')`, nil, false)
+	yield(`JSON_VALID('true')`, nil, false)
+	yield(`JSON_VALID('false')`, nil, false)
+	yield(`JSON_VALID('[]')`, nil, false)
+	yield(`JSON_VALID('{}')`, nil, false)
+	yield(`JSON_VALID('"hello"')`, nil, false)
+	yield(`JSON_VALID('')`, nil, false)
+	yield(`JSON_VALID(1.5)`, nil, false)
+	yield(`JSON_VALID(TRUE)`, nil, false)
 }
 
 func FnJSONContainsPath(yield Query) {
